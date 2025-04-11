@@ -1,0 +1,1 @@
+Following https://www.youtube.com/watch?v=nKBhz6oJYsc&t=262s tutorial. This game is going to be the first of the EMG controlled games. The expected input is a single EMG channel with digital input utilizing a threshold amplitude value for "jump button pressed". 
