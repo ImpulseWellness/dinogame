@@ -18,8 +18,8 @@ var score : int
 const SCORE_MODIFIER : int = 10
 var high_score : int
 var speed : float 
-const START_SPEED : float = 3.0
-const MAX_SPEED : int = 15
+const START_SPEED : float = 4  
+const MAX_SPEED : int = 4
 const SPEED_MODIFIER : int = 2500
 var screen_size : Vector2i
 var ground_height : int
@@ -42,7 +42,7 @@ func new_game():
 	show_score()
 	game_running = false
 	get_tree().paused = false
-	difficulty = 0
+	difficulty = 1
 	
 	#delete all obstacles
 	for obs in obstacles:
@@ -106,14 +106,6 @@ func generate_obs():
 			var obs_y : int = screen_size.y - ground_height - (obs_height * obs_scale.y / 2) + 5
 			last_obs = obs
 			add_obs(obs, obs_x, obs_y)
-		#additionally random chance to spawn a bird
-		if difficulty == MAX_DIFFICULTY:
-			if (randi() % 2) == 0:
-				#generate bird obstacles
-				obs = bird_scene.instantiate()
-				var obs_x : int = screen_size.x + score + 100
-				var obs_y : int = bird_heights[randi() % bird_heights.size()]
-				add_obs(obs, obs_x, obs_y)
 
 func add_obs(obs, x, y):
 	obs.position = Vector2i(x, y)
@@ -138,12 +130,10 @@ func check_high_score():
 		$HUD.get_node("HighScoreLabel").text = "HIGH SCORE: " + str(high_score / SCORE_MODIFIER)
 
 func adjust_difficulty():
-	difficulty = score / SPEED_MODIFIER
-	if difficulty > MAX_DIFFICULTY:
-		difficulty = MAX_DIFFICULTY
+	difficulty = 1
 
 func game_over():
 	check_high_score()
 	get_tree().paused = true
 	game_running = false
-	$GameOver.show()
+	new_game()

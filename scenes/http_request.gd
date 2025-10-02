@@ -7,9 +7,9 @@ class RMSCalculator:
 	# --------------------------
 	var window_size: int = 1000          # RMS window length, in samples
 	var shift_size: int = 1000           # hop size (how often to compute RMS), in samples
-	var threshold: float = 1.75         # trigger threshold on RMS
+	var threshold: float = 0.175       # trigger threshold on RMS
 	var sample_rate: float = 3960.0     # samples per second
-	var threshold_count: int = 15  # How many consecutive values need to pass before we tap
+	var threshold_count: int = 25  # How many consecutive values need to pass before we tap
 
 
 	# How much history to keep (seconds) for memory trimming.
@@ -144,7 +144,7 @@ class RMSCalculator:
 		_append_raw_samples(numbers)
 		_compute_new_rms()
 		# Optionally prune immediately after a big append (keeps memory bounded)
-		_prune_old_data()
+		#_prune_old_data()
 
 
 	# Given the delta of the frames, do the following:
@@ -163,7 +163,7 @@ class RMSCalculator:
 		_compute_new_rms()
 		
 		# Trim old data
-		_prune_old_data()
+		#_prune_old_data()
 				
 		# Decide: check the latest N RMS values at or before "now"
 		var p_list: Array = _latest_rms_values(curr_time_idx, self.threshold_count)
@@ -173,7 +173,6 @@ class RMSCalculator:
 				pass_count += 1
 
 		if pass_count >= self.threshold_count:
-			print("clicked")
 			return true
 		return false
 
