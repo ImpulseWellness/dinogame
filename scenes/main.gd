@@ -18,8 +18,8 @@ var score : int
 const SCORE_MODIFIER : int = 10
 var high_score : int
 var speed : float 
-const START_SPEED : float = 4  
-const MAX_SPEED : int = 4
+const START_SPEED : float = 16
+const MAX_SPEED : int = 16
 const SPEED_MODIFIER : int = 2500
 var screen_size : Vector2i
 var ground_height : int
@@ -94,7 +94,9 @@ func _process(delta):
 
 func generate_obs():
 	#generate ground obstacles
-	if obstacles.is_empty() or last_obs.position.x < score + randi_range(300, 500):
+	#if obstacles.is_empty() or last_obs.position.x < score + randi_range(300, 500):
+	if obstacles.is_empty() or last_obs.position.x < score + randi_range(50, 300):
+
 		var obs_type = obstacle_types[randi() % obstacle_types.size()]
 		var obs
 		var max_obs = difficulty + 1

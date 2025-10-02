@@ -5,9 +5,9 @@ class RMSCalculator:
 	# --------------------------
 	# Tunables
 	# --------------------------
-	var window_size: int = 1000          # RMS window length, in samples
-	var shift_size: int = 1000           # hop size (how often to compute RMS), in samples
-	var threshold: float = 0.175       # trigger threshold on RMS
+	var window_size: int = 750          # RMS window length, in samples
+	var shift_size: int = 750           # hop size (how often to compute RMS), in samples
+	var threshold: float = 0.12       # trigger threshold on RMS
 	var sample_rate: float = 3960.0     # samples per second
 	var threshold_count: int = 25  # How many consecutive values need to pass before we tap
 
