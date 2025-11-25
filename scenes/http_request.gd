@@ -188,46 +188,77 @@ class RMSCalculator:
 var peer = WebSocketClient.new()
 var rmsInstance = RMSCalculator.new()
 
-func _parse_connected_devices(resp: HTTPResult) -> Array:
+func _parse_connected_devices(resp: HTTPResult) -> Dictionary:
 	if !resp.success() or resp.status_err():
 		push_error("Couldn't get connected devices")
 		
 	var body = resp.body_as_json() as Dictionary
-	var all_devices = []
+	var all_devices = {}
 	
 	var list = body.get("data").get("devices")
 	
 	for item in list:
-		var typedItem = item as Dictionary
-		all_devices.append(typedItem.get("address"))
+		all_devices.set(item.get("address"), item)
 	
 	return all_devices
-	
-func get_first_chnl_data(json_msg: Dictionary):
-	return json_msg.get("data")[0]
 	 
 var msg_printed = false
-func handle_ws_message(message):
-	message = JSON.parse_string(message) 
-	var data = get_first_chnl_data(message)
-	var starting_time_stamp = message.get("timestamp")
-	rmsInstance.add_raw_data(data, starting_time_stamp)
+func handle_ws_message(device: Dictionary, message: PackedByteArray):
+		# 1. Setup the Buffer
+	var buffer = StreamPeerBuffer.new()
+	buffer.data_array = message
 	
-func print_sad():
+	# CRITICAL: Data is in Little Endian.
+	# Godot StreamPeerBuffer defaults to Big Endian. We must flip it.
+	buffer.big_endian = false 
+
+	var type = buffer.get_u32()            # const type = view.getUint32(offset, true);
+	var timestamp = buffer.get_u32()       # const timestamp = view.getUint32(offset, true);
+	var number_of_samples = buffer.get_u32() # const number_of_samples = view.getUint32(offset, true);
+
+	if type == 0:
+		var emg_data: Array = []
+		print(device)
+		var number_of_channels = device.get("device_settings").get("connection_info").get("emg_ic").get("number_of_active_channels")
+		print(number_of_channels)
+
+		for ch in range(number_of_channels):
+			var chl_data = []
+			for i in range(number_of_samples):
+				var sample = buffer.get_float()
+				chl_data.append(sample)
+			emg_data.append(chl_data)
+		# We only care about channel 0 so:
+		rmsInstance.add_raw_data(emg_data[0], timestamp)
+	else:
+		print("Game doesn't handle IMU data")
+		
+	#message = JSON.parse_string(message) 
+	#var data = get_first_chnl_data(message)
+	#var starting_time_stamp = message.get("timestamp")
+	#rmsInstance.add_raw_data(data, starting_time_stamp)
+	
+func _handle_connection_failure():
 	print("Failed connection")
 
-func print_happy():
+func _handle_connection_success():
 	print("Connected")
 
 func _ready() -> void:
 	var get_devices = await self.async_request("http://127.0.0.1:64209/connections/get_connected_devices")
-	var addressses = _parse_connected_devices(get_devices)
-	var first_address = addressses[0]
-	print("Connecting to: " + first_address)
-	peer.received_message.connect(handle_ws_message)
-	peer.connection_failure.connect(print_sad)
-	peer.connected_to_socket.connect(print_happy)
-	peer._connect("ws://127.0.0.1:64209/ws/" + first_address + "?dtype=emg&app_id=dinogame")
+	var all_devices = _parse_connected_devices(get_devices)
+	var first_device_address = all_devices.keys()[0]
+	var first_device = all_devices.get(first_device_address)
+	
+	print("Connecting to: " + first_device_address)
+	
+	var lambda = func(rawMessage: PackedByteArray):
+		handle_ws_message(first_device, rawMessage)
+	
+	peer.received_binary.connect(lambda)
+	peer.connection_failure.connect(_handle_connection_failure)
+	peer.connected_to_socket.connect(_handle_connection_success)
+	peer._connect("ws://127.0.0.1:64209/ws/" + first_device_address + "?dtype=emg&app_name=dinogame")
 
 func gen_press():
 	var ui_accept = InputEventAction.new()

@@ -5,6 +5,7 @@ signal connected_to_socket;
 signal disconnected_from_socket;
 signal connection_failure;
 signal received_message(message: String);
+signal received_binary(message: PackedByteArray);
 
 const TIME_TO_FAILURE = 5;
 
@@ -64,15 +65,19 @@ func _resolve_pending_connection(delta: float) -> void:
 func _resolve_packets() -> void:
 	if _connection_state < _websocket.STATE_OPEN && _connection_state > _websocket.STATE_CLOSING:
 		return;
-	
+		
 	while _websocket.get_available_packet_count() > 0:
-		var packet: PackedByteArray = _websocket.get_packet();
-		var packet_as_string = packet.get_string_from_utf8();
-
-		if packet_as_string.is_empty() || !_websocket.was_string_packet():
-			continue;
+			# 1. Get the raw bytes first
+			var packet: PackedByteArray = _websocket.get_packet()
 			
-		received_message.emit(packet_as_string);
+			# 2. Check if the WebSocket frame was Text or Binary
+			if _websocket.was_string_packet():
+				# Handle Text
+				var text = packet.get_string_from_utf8()
+				received_message.emit(text)
+			else:
+				# Handle Binary
+				received_binary.emit(packet)
 
 func _poll(delta: float) -> void:
 	if _websocket == null:
