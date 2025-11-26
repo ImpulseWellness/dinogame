@@ -213,14 +213,12 @@ func handle_ws_message(device: Dictionary, message: PackedByteArray):
 	buffer.big_endian = false 
 
 	var type = buffer.get_u32()            # const type = view.getUint32(offset, true);
-	var timestamp = buffer.get_u32()       # const timestamp = view.getUint32(offset, true);
+	var timestamp = buffer.get_double()       # const timestamp = view.getUint32(offset, true);
 	var number_of_samples = buffer.get_u32() # const number_of_samples = view.getUint32(offset, true);
 
 	if type == 0:
 		var emg_data: Array = []
-		print(device)
 		var number_of_channels = device.get("device_settings").get("connection_info").get("emg_ic").get("number_of_active_channels")
-		print(number_of_channels)
 
 		for ch in range(number_of_channels):
 			var chl_data = []
@@ -228,6 +226,7 @@ func handle_ws_message(device: Dictionary, message: PackedByteArray):
 				var sample = buffer.get_float()
 				chl_data.append(sample)
 			emg_data.append(chl_data)
+			
 		# We only care about channel 0 so:
 		rmsInstance.add_raw_data(emg_data[0], timestamp)
 	else:
