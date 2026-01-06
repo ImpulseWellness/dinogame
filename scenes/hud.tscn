@@ -1,0 +1,130 @@
+[gd_scene load_steps=3 format=3 uid="uid://lyf4a3sklk1o"]
+
+[ext_resource type="FontFile" uid="uid://s15272omc2m3" path="res://assets/fonts/retro.ttf" id="1_xwrdd"]
+[ext_resource type="Script" uid="uid://c1l4b6v7c5h3k" path="res://scenes/calibration_overlay.gd" id="2_1b1d3"]
+
+[node name="HUD" type="CanvasLayer"]
+
+[node name="ScoreLabel" type="Label" parent="."]
+offset_right = 183.0
+offset_bottom = 54.0
+theme_override_fonts/font = ExtResource("1_xwrdd")
+theme_override_font_sizes/font_size = 40
+text = "SCORE: "
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="StartLabel" type="Label" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -268.5
+offset_top = -27.0
+offset_right = 268.5
+offset_bottom = 27.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_fonts/font = ExtResource("1_xwrdd")
+theme_override_font_sizes/font_size = 40
+text = "PRESS SPACE TO PLAY"
+horizontal_alignment = 1
+vertical_alignment = 1
+visible = false
+
+[node name="CountdownLabel" type="Label" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -100.0
+offset_top = -80.0
+offset_right = 100.0
+offset_bottom = 80.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_fonts/font = ExtResource("1_xwrdd")
+theme_override_font_sizes/font_size = 96
+text = "3"
+horizontal_alignment = 1
+vertical_alignment = 1
+visible = false
+
+[node name="CalibrationOverlay" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 0.0
+offset_bottom = 0.0
+script = ExtResource("2_1b1d3")
+visible = false
+
+[node name="CalibrationLabel" type="Label" parent="CalibrationOverlay"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_top = -30.0
+offset_right = 150.0
+offset_bottom = 30.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_fonts/font = ExtResource("1_xwrdd")
+theme_override_font_sizes/font_size = 48
+text = "SQUEEZE"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RMSPanel" type="Control" parent="."]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -260.0
+offset_top = 60.0
+offset_right = -10.0
+offset_bottom = 130.0
+
+[node name="RMSBg" type="ColorRect" parent="RMSPanel"]
+anchors_preset = 15
+offset_right = 0.0
+offset_bottom = 0.0
+color = Color(0, 0, 0, 0.45)
+
+[node name="RMSLabel" type="Label" parent="RMSPanel"]
+anchors_preset = 15
+offset_left = 6.0
+offset_top = 4.0
+offset_right = -6.0
+offset_bottom = -32.0
+theme_override_fonts/font = ExtResource("1_xwrdd")
+theme_override_font_sizes/font_size = 16
+text = "RMS: 0.00 / Target: 0.00"
+horizontal_alignment = 0
+vertical_alignment = 1
+
+[node name="RMSBar" type="ProgressBar" parent="RMSPanel"]
+anchors_preset = 15
+offset_left = 6.0
+offset_top = 40.0
+offset_right = -6.0
+offset_bottom = -8.0
+min_value = 0.0
+max_value = 1.0
+value = 0.0
+
+[node name="HighScoreLabel" type="Label" parent="."]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -318.0
+offset_bottom = 54.0
+grow_horizontal = 0
+theme_override_fonts/font = ExtResource("1_xwrdd")
+theme_override_font_sizes/font_size = 40
+text = "HIGH SCORE: "
+horizontal_alignment = 1
+vertical_alignment = 1
