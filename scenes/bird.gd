@@ -1,11 +1,6 @@
 extends Area2D
 
 
-# Called when the node enters the scene tree for the first time.
-func _ready():
-	pass # Replace with function body.
-
-
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta):
-	position.x -= get_parent().speed / 2
+func _physics_process(delta):
+	if get_parent().game_running:
+		position.x -= get_parent().speed * delta / 2.0

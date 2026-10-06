@@ -1,0 +1,8 @@
+{
+	"schemaVersion": 1,
+	"layoutId": "dino",
+	"inputs": [
+		{"inputId": "button_1", "type": "button", "required": true, "action": "jump"},
+		{"inputId": "button_2", "type": "button", "required": true, "action": "duck"}
+	]
+}

@@ -1,204 +1,212 @@
 extends Node
 
-#preload obstacles
-var stump_scene = preload("res://scenes/stump.tscn")
-var rock_scene = preload("res://scenes/rock.tscn")
-var barrel_scene = preload("res://scenes/barrel.tscn")
-var bird_scene = preload("res://scenes/bird.tscn")
-var obstacle_types := [stump_scene, rock_scene, barrel_scene]
-var obstacles : Array
-var bird_heights := [275, 390]
+enum PlayState { PAUSED, RUNNING, GAME_OVER }
 
-#game variables
-const DINO_START_POS := Vector2i(150, 485)
-const CAM_START_POS := Vector2i(576, 324)
-var difficulty
-const MAX_DIFFICULTY : int = 2
-var score : int
-const SCORE_MODIFIER : int = 10
-var high_score : int
-var speed : float 
-const START_SPEED : float = 16
-const MAX_SPEED : int = 16
-const SPEED_MODIFIER : int = 2500
-var screen_size : Vector2i
-var ground_height : int
-var game_running : bool
-var last_obs
+const DINO_START_POS: Vector2 = Vector2(150, 488)
+const CAM_START_POS: Vector2 = Vector2(576, 324)
+const SPEED: float = 960.0
+const SCORE_MODIFIER: float = 10.0
+const OBSTACLE_TYPES: Array = [preload("res://scenes/stump.tscn"), preload("res://scenes/rock.tscn"), preload("res://scenes/barrel.tscn")]
 
-const CALIBRATION_DURATION : float = 3.0
-var calibrating : bool = false
-var calibration_elapsed : float = 0.0
-var calibration_max_rms : float = 0.0
-const COUNTDOWN_DURATION : float = 3.0
-var countdown_active : bool = false
-var countdown_remaining : float = 0.0
+var play_state: PlayState = PlayState.PAUSED
+var game_running: bool:
+	get:
+		return play_state == PlayState.RUNNING
+var speed: float = SPEED
+var score: float = 0.0
+var high_score: float = 0.0
+var obstacles: Array = []
+var next_obstacle_x: float = 1200.0
+var obstacles_enabled: bool = true
+var resume_requested: bool = false
+var pause_reason: String = "Connect your sensor and calibrate in the desktop host."
+var keyboard_mode: bool = false
+var input_adapter: Node
+var keyboard_state: Dictionary = {"button_1": {"pressed": false, "value": 0}, "button_2": {"pressed": false, "value": 0}}
+var keyboard_transitions: Array = []
+var resume_button: Button
+var status_label: Label
+var pause_panel: PanelContainer
 
-
-# Called when the node enters the scene tree for the first time.
-func _ready():
-	screen_size = get_window().size
-	ground_height = $Ground.get_node("Sprite2D").texture.get_height()
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	$Dino.process_mode = Node.PROCESS_MODE_PAUSABLE
+	$Bg.process_mode = Node.PROCESS_MODE_PAUSABLE
 	$GameOver.get_node("Button").pressed.connect(new_game)
+	keyboard_mode = OS.get_cmdline_user_args().has("--keyboard")
+	for argument: String in OS.get_cmdline_user_args():
+		if argument.begins_with("--jump-hold-seconds="):
+			$Dino.max_jump_hold_seconds = clampf(argument.get_slice("=", 1).to_float(), 0.0, 0.5)
+	_create_pause_ui()
+	if not keyboard_mode:
+		input_adapter = preload("res://data_process/controller_client.gd").new()
+		input_adapter.availability_changed.connect(_availability_changed)
+		add_child(input_adapter)
 	new_game()
-	#$HTTPRequest.start()
 
+func _create_pause_ui() -> void:
+	pause_panel = PanelContainer.new()
+	pause_panel.position = Vector2(276, 150)
+	pause_panel.custom_minimum_size = Vector2(600, 260)
+	$HUD.add_child(pause_panel)
+	var column: VBoxContainer = VBoxContainer.new()
+	column.add_theme_constant_override("separation", 16)
+	pause_panel.add_child(column)
+	status_label = Label.new()
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_label.custom_minimum_size = Vector2(560, 75)
+	status_label.add_theme_font_size_override("font_size", 22)
+	column.add_child(status_label)
+	resume_button = Button.new()
+	resume_button.text = "Resume"
+	resume_button.pressed.connect(resume_game)
+	column.add_child(resume_button)
+	if not keyboard_mode:
+		var tune_button: Button = Button.new()
+		tune_button.text = "Calibration & tuning"
+		tune_button.pressed.connect(func(): OS.shell_open(input_adapter.base_url + "/controller/tuning"))
+		column.add_child(tune_button)
+	var quit_button: Button = Button.new()
+	quit_button.text = "Quit"
+	quit_button.pressed.connect(func(): get_tree().quit())
+	column.add_child(quit_button)
 
-func new_game():
-	#reset variables
-	score = 0
-	show_score()
-	game_running = false
-	get_tree().paused = false
-	difficulty = 1
-	
-	#delete all obstacles
-	for obs in obstacles:
-		obs.queue_free()
+func new_game() -> void:
+	play_state = PlayState.PAUSED
+	resume_requested = false
+	score = 0.0
+	next_obstacle_x = 1200.0
+	for obstacle: Node in obstacles:
+		obstacle.queue_free()
 	obstacles.clear()
-	
-	#reset the nodes
 	$Dino.position = DINO_START_POS
-	$Dino.velocity = Vector2i(0, 0)
+	$Dino.reset_controls()
 	$Camera2D.position = CAM_START_POS
-	$Ground.position = Vector2i(0, 0)
-	
-	#reset hud and game over screen
-	$HUD.get_node("StartLabel").hide()
-	$HUD.get_node("CountdownLabel").hide()
+	$Ground.position = Vector2.ZERO
 	$GameOver.hide()
-	start_calibration()
-
-func start_calibration():
-	calibrating = true
-	calibration_elapsed = 0.0
-	calibration_max_rms = 0.0
-	countdown_active = false
-	countdown_remaining = 0.0
-	var overlay = $HUD.get_node("CalibrationOverlay")
-	overlay.visible = true
-	overlay.set_progress(0.0)
-	overlay.set_spin(0.0)
-	$HTTPRequest.rmsInstance.reset_all()
-	
-func start_countdown():
-	countdown_active = true
-	countdown_remaining = COUNTDOWN_DURATION
-	var countdown_label = $HUD.get_node("CountdownLabel")
-	countdown_label.text = str(int(COUNTDOWN_DURATION))
-	countdown_label.show()
-
-func update_rms_ui():
-	var latest_rms = $HTTPRequest.rmsInstance.latest_rms_value()
-	var target = $HTTPRequest.rmsInstance.threshold
-	var label = $HUD.get_node("RMSPanel/RMSLabel")
-	var bar = $HUD.get_node("RMSPanel/RMSBar")
-	label.text = "RMS: " + str(snappedf(latest_rms, 0.01)) + " / Target: " + str(snappedf(target, 0.01))
-	bar.max_value = max(0.01, target)
-	bar.value = latest_rms
-
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta):
-	update_rms_ui()
-	if calibrating:
-		calibration_elapsed += delta
-		var progress = min(calibration_elapsed / CALIBRATION_DURATION, 1.0)
-		var overlay = $HUD.get_node("CalibrationOverlay")
-		overlay.set_progress(progress)
-		overlay.set_spin(progress * TAU)
-		var latest_rms = $HTTPRequest.rmsInstance.latest_rms_value()
-		if latest_rms > calibration_max_rms:
-			calibration_max_rms = latest_rms
-
-		if calibration_elapsed >= CALIBRATION_DURATION:
-			calibrating = false
-			overlay.visible = false
-			if calibration_max_rms > 0.0:
-				$HTTPRequest.rmsInstance.threshold = calibration_max_rms * 0.2
-			start_countdown()
-	elif countdown_active:
-		countdown_remaining -= delta
-		var display = max(1, int(ceil(countdown_remaining)))
-		var countdown_label = $HUD.get_node("CountdownLabel")
-		countdown_label.text = str(display)
-		if countdown_remaining <= 0.0:
-			countdown_active = false
-			countdown_label.hide()
-			game_running = true
-			$HUD.get_node("StartLabel").hide()
-	elif game_running:
-		#speed up and adjust difficulty
-		speed = START_SPEED + score / SPEED_MODIFIER
-		if speed > MAX_SPEED:
-			speed = MAX_SPEED
-		adjust_difficulty()
-		
-		#generate obstacles
-		generate_obs()
-		
-		#move dino and camera
-		$Dino.position.x += speed
-		$Camera2D.position.x += speed
-		
-		#update score
-		score += speed
-		show_score()
-		
-		#update ground position
-		if $Camera2D.position.x - $Ground.position.x > screen_size.x * 1.5:
-			$Ground.position.x += screen_size.x
-				
-		#remove obstacles that have gone off screen
-		for obs in obstacles:
-			if obs.position.x < ($Camera2D.position.x - screen_size.x):
-				remove_obs(obs)
-	else:
-		pass
-
-func generate_obs():
-	#generate ground obstacles
-	#if obstacles.is_empty() or last_obs.position.x < score + randi_range(300, 500):
-	if obstacles.is_empty() or last_obs.position.x < score + randi_range(50, 300):
-
-		var obs_type = obstacle_types[randi() % obstacle_types.size()]
-		var obs
-		var max_obs = difficulty + 1
-		for i in range(randi() % max_obs + 1):
-			obs = obs_type.instantiate()
-			var obs_height = obs.get_node("Sprite2D").texture.get_height()
-			var obs_scale = obs.get_node("Sprite2D").scale
-			var obs_x : int = screen_size.x + score + 100 + (i * 100)
-			var obs_y : int = screen_size.y - ground_height - (obs_height * obs_scale.y / 2) + 5
-			last_obs = obs
-			add_obs(obs, obs_x, obs_y)
-
-func add_obs(obs, x, y):
-	obs.position = Vector2i(x, y)
-	obs.body_entered.connect(hit_obs)
-	add_child(obs)
-	obstacles.append(obs)
-
-func remove_obs(obs):
-	obs.queue_free()
-	obstacles.erase(obs)
-	
-func hit_obs(body):
-	if body.name == "Dino":
-		game_over()
-
-func show_score():
-	$HUD.get_node("ScoreLabel").text = "SCORE: " + str(score / SCORE_MODIFIER)
-
-func check_high_score():
-	if score > high_score:
-		high_score = score
-		$HUD.get_node("HighScoreLabel").text = "HIGH SCORE: " + str(high_score / SCORE_MODIFIER)
-
-func adjust_difficulty():
-	difficulty = 1
-
-func game_over():
-	check_high_score()
+	get_tree().paused = false
+	$Dino.advance(1.0 / 60.0, false)
 	get_tree().paused = true
-	game_running = false
-	new_game()
+	if keyboard_mode:
+		pause_reason = "Keyboard play test. Space jumps. Down ducks. Escape pauses."
+	_update_ui()
+
+func pause_game(reason: String = "Paused. Resume when ready.") -> void:
+	if play_state == PlayState.GAME_OVER:
+		return
+	play_state = PlayState.PAUSED
+	resume_requested = false
+	pause_reason = reason
+	get_tree().paused = true
+	_update_ui()
+
+func resume_game() -> void:
+	if play_state == PlayState.GAME_OVER:
+		return
+	if keyboard_mode:
+		keyboard_transitions.clear()
+		_begin_play(keyboard_state)
+	elif input_adapter.available and input_adapter.has_current_frame:
+		resume_requested = true
+		input_adapter.request_resynchronize()
+		pause_reason = "Synchronizing current controls..."
+	_update_ui()
+
+func _begin_play(state: Dictionary) -> void:
+	resume_requested = false
+	play_state = PlayState.RUNNING
+	get_tree().paused = false
+	$Dino.synchronize_controls(state)
+	_update_ui()
+
+func _availability_changed(available: bool, reason: String) -> void:
+	if not available:
+		pause_game("Input unavailable. " + reason.replace("_", " ") + ".")
+	else:
+		pause_reason = "Controller ready. Choose Resume to play."
+	_update_ui()
+
+func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		if game_running:
+			pause_game()
+		elif play_state == PlayState.PAUSED:
+			resume_game()
+	if not keyboard_mode or (event is InputEventKey and event.echo):
+		return
+	for action: String in ["ui_accept", "ui_down"]:
+		if not event.is_action(action):
+			continue
+		var input_id: String = "button_1" if action == "ui_accept" else "button_2"
+		var pressed: bool = event.is_pressed()
+		if keyboard_state[input_id]["pressed"] != pressed:
+			keyboard_state[input_id] = {"pressed": pressed, "value": int(pressed)}
+			keyboard_transitions.append({"inputId": input_id, "pressed": pressed, "atUs": Time.get_ticks_usec()})
+
+func _physics_process(delta: float) -> void:
+	if not keyboard_mode:
+		input_adapter.poll_socket()
+		for frame: Dictionary in input_adapter.take_frames():
+			if resume_requested and frame["resynchronize"] and frame["available"]:
+				_begin_play(frame["state"])
+			elif game_running:
+				if frame["resynchronize"]:
+					pause_game("Controller changed. Choose Resume to synchronize.")
+				else:
+					$Dino.apply_controller_frame(frame["state"], frame["transitions"])
+		input_adapter.request_frame()
+	elif game_running:
+		$Dino.apply_controller_frame(keyboard_state, keyboard_transitions)
+	keyboard_transitions.clear()
+	if not game_running:
+		_update_ui()
+		return
+	advance_game(delta)
+
+func advance_game(delta: float) -> void:
+	$Dino.advance(delta, true)
+	$Dino.position.x += SPEED * delta
+	$Camera2D.position.x += SPEED * delta
+	score += SPEED * delta
+	if $Camera2D.position.x - $Ground.position.x > 1152.0 * 1.5:
+		$Ground.position.x += 1152.0
+	if obstacles_enabled:
+		_generate_obstacles()
+	for obstacle: Node2D in obstacles.duplicate():
+		if obstacle.position.x < $Camera2D.position.x - 1152.0:
+			obstacle.queue_free()
+			obstacles.erase(obstacle)
+	_update_ui()
+
+func _generate_obstacles() -> void:
+	if $Dino.position.x + 1152.0 < next_obstacle_x:
+		return
+	var obstacle: Area2D = OBSTACLE_TYPES.pick_random().instantiate()
+	var sprite: Sprite2D = obstacle.get_node("Sprite2D")
+	obstacle.position = Vector2(next_obstacle_x, 552.0 - sprite.texture.get_height() * sprite.scale.y / 2.0 + 5.0)
+	obstacle.body_entered.connect(_hit_obstacle)
+	add_child(obstacle)
+	obstacles.append(obstacle)
+	next_obstacle_x += randf_range(600.0, 950.0)
+
+func _hit_obstacle(body: Node) -> void:
+	if body != $Dino:
+		return
+	high_score = maxf(high_score, score)
+	play_state = PlayState.GAME_OVER
+	get_tree().paused = true
+	$GameOver.show()
+	pause_panel.hide()
+
+func _update_ui() -> void:
+	$HUD/ScoreLabel.text = "SCORE: " + str(int(score / SCORE_MODIFIER))
+	$HUD/HighScoreLabel.text = "HIGH SCORE: " + str(int(high_score / SCORE_MODIFIER))
+	pause_panel.visible = play_state == PlayState.PAUSED
+	status_label.text = pause_reason
+	resume_button.disabled = resume_requested or (not keyboard_mode and (not input_adapter.available or not input_adapter.has_current_frame))
+
+func get_snapshot() -> Dictionary:
+	var snapshot: Dictionary = {"running": game_running, "paused": get_tree().paused, "resumeRequested": resume_requested, "reason": pause_reason, "score": score, "x": $Dino.position.x, "y": $Dino.position.y, "velocityY": $Dino.velocity.y, "grounded": $Dino.is_on_floor(), "ducking": $Dino.ducking, "jumpHeld": $Dino.jump_held, "duckHeld": $Dino.duck_held, "jumpCount": $Dino.jump_count, "jumpHoldSeconds": $Dino.jump_hold_elapsed}
+	if not keyboard_mode:
+		snapshot["controller"] = input_adapter.get_snapshot()
+	return snapshot

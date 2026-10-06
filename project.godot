@@ -11,9 +11,19 @@ config_version=5
 [application]
 
 config/name="DinoGame"
-run/main_scene="uid://bju4jxwr7a0pg"
+run/main_scene="res://scenes/main.tscn"
+run/max_fps=60
 config/features=PackedStringArray("4.5", "GL Compatibility")
-config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=1152
+window/size/viewport_height=648
+window/stretch/mode="canvas_items"
+
+[physics]
+
+common/physics_ticks_per_second=60
 
 [rendering]
 
